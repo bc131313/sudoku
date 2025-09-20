@@ -1,0 +1,540 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Sudoku — Hacker Neon</title>
+  <style>
+    /* ============== Hacker Neon Theme ============== */
+    :root{
+      --bg1:#0b0f10; /* near-black */
+      --bg2:#101b1c; /* deep teal tint */
+      --accent:#00ff88; /* neon green */
+      --accent2:#26ffe6; /* neon aqua */
+      --danger:#ff3b3b; /* red */
+      --muted:#8aa0a2;
+      --cell:#0f1718;
+      --cell-alt:#0d1415;
+      --grid:#123c3f;
+      --glow:0 0 12px rgba(0,255,136,.45), 0 0 36px rgba(0,255,136,.25), 0 0 64px rgba(0,255,136,.15);
+      --glow-soft:0 0 8px rgba(38,255,230,.35), 0 0 24px rgba(38,255,230,.2);
+    }
+    *{box-sizing: border-box}
+    html,body{height:100%}
+    body{
+      margin:0;
+      font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Inter, Helvetica, Arial, "Apple Color Emoji","Segoe UI Emoji";
+      color:#d9ffef;
+      background: radial-gradient(1200px 800px at 20% -10%, rgba(0,255,136,.08), transparent 60%),
+                  radial-gradient(1000px 700px at 120% 110%, rgba(38,255,230,.08), transparent 60%),
+                  linear-gradient(135deg, var(--bg1), var(--bg2));
+                  position: fixed;
+      top: 0;
+      left: 0;
+      width: 100vw;
+      height: 100vh;
+      background-image: url(https://thumbs.dreamstime.com/b/neon-lit-gaming-controller-futuristic-details-close-up-emitting-vibrant-green-light-set-immersive-high-tech-360614672.jpg) ;
+      background-size: cover;
+      display:grid;
+      place-items:center;
+      padding:28px 16px;
+    }
+
+    .app{
+      width:min(1100px, 96vw);
+      display:grid;
+      grid-template-columns: 1fr 360px;
+      gap:22px;
+    }
+
+    @media (max-width: 980px){
+      .app{grid-template-columns: 1fr}
+    }
+
+    .card{
+      background: linear-gradient(180deg, rgba(255,255,255,.02), rgba(255,255,255,.01));
+      border:1px solid rgba(0,255,136,.18);
+      border-radius:20px;
+      box-shadow: 0 10px 30px rgba(0,0,0,.4), var(--glow-soft);
+      backdrop-filter: blur(8px);
+      -webkit-backdrop-filter: blur(8px);
+    }
+
+    .header{
+      padding:18px 20px;
+      display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px;
+      border-bottom:1px solid rgba(0,255,136,.15);
+    }
+    .title{
+      font-size: clamp(20px, 2.4vw, 28px);
+      letter-spacing:.6px;
+      text-shadow: var(--glow);
+    }
+    .brand{
+      font-weight:700;color:var(--accent);
+    }
+
+    .controls{
+      display:flex;flex-wrap:wrap;gap:10px;align-items:center
+    }
+    select, button{
+      background: #0b1415;
+      color: #d9ffef;
+      border:1px solid rgba(0,255,136,.35);
+      border-radius: 12px;
+      padding:10px 12px;
+      font-size:14px;
+      cursor:pointer;
+      transition: transform .06s ease, box-shadow .15s ease, border-color .2s ease;
+    }
+    select:focus, button:focus{outline:none;}
+    button:hover, select:hover{
+      border-color: var(--accent);
+      box-shadow: var(--glow);
+      transform: translateY(-1px);
+    }
+
+    .content{display:grid;gap:22px;grid-template-columns:1fr}
+
+    /* ============== Sudoku Grid ============== */
+    .board-wrap{padding:16px}
+    .board{
+      width:min(92vw, 560px);
+      aspect-ratio:1/1;
+      margin-inline:auto;
+      display:grid;
+      grid-template-columns: repeat(9, 1fr);
+      grid-template-rows: repeat(9, 1fr);
+      border:2px solid var(--accent);
+      border-radius:16px;
+      overflow:hidden;
+      box-shadow: var(--glow);
+    }
+
+    .cell{
+      position:relative;
+      display:flex;align-items:center;justify-content:center;
+      border:1px solid var(--grid);
+      background: linear-gradient(180deg, var(--cell), var(--cell-alt));
+    }
+    .cell:nth-child(3n){border-right-width:2px}
+    .cell:nth-child(n+19):nth-child(-n+27),
+    .cell:nth-child(n+46):nth-child(-n+54){border-bottom-width:2px}
+
+    input.sudoku{
+      width:100%;height:100%;
+      text-align:center;
+      background:transparent;
+      color:#eafff7;
+      font-size: clamp(16px, 4.2vw, 28px);
+      font-weight:700;
+      caret-color: var(--accent2);
+      text-shadow: 0 0 6px rgba(255,255,255,.15), 0 0 10px rgba(38,255,230,.25);
+      border:none;outline:none;
+    }
+    input.sudoku:disabled{opacity:.9;color:#c1ffe7}
+
+    .cell.fixed{background:linear-gradient(180deg, #0e1718, #0d1516)}
+    .cell.active{box-shadow: inset 0 0 0 9999px rgba(0,255,136,.08)}
+    .cell.conflict{box-shadow: inset 0 0 0 9999px rgba(255,59,59,.15)}
+    .cell.same{box-shadow: inset 0 0 0 9999px rgba(38,255,230,.1)}
+
+    /* ============== Side Panel ============== */
+    .side{padding:14px 16px}
+    .stat{
+      display:flex;align-items:center;justify-content:space-between;
+      padding:10px 12px;margin-bottom:8px;
+      border:1px dashed rgba(0,255,136,.25);
+      border-radius:12px;
+      background: linear-gradient(180deg, rgba(0,255,136,.06), rgba(0,255,136,.02));
+    }
+    .labels{display:flex;gap:10px;flex-wrap:wrap}
+    .pill{
+      font-size:12px;padding:6px 10px;border-radius:999px;
+      border:1px solid rgba(38,255,230,.4);
+      background: linear-gradient(180deg, rgba(38,255,230,.12), rgba(38,255,230,.04));
+      box-shadow: var(--glow-soft);
+    }
+    .danger{border-color: rgba(255,59,59,.5); color:#ffd2d2; background:linear-gradient(180deg, rgba(255,59,59,.1), rgba(255,59,59,.04));}
+
+    .footer{padding:14px 16px;border-top:1px solid rgba(0,255,136,.15);display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap}
+    .credits{font-size:12px;color:var(--muted)}
+    .link{color:var(--accent2);text-decoration:none}
+  </style>
+</head>
+<body>
+  <div class="app card">
+    <div class="header">
+      <div class="title">⚡ <span class="brand">Hacker Sudoku</span> — Neon Grid</div>
+      <div class="controls">
+        <label for="level" style="color:#9fe;opacity:.9">Level</label>
+        <select id="level">
+          <option value="easy">Easy</option>
+          <option value="medium" selected>Medium</option>
+          <option value="hard">Hard</option>
+          <option value="expert">Expert</option>
+        </select>
+        <button id="newGame">New Game</button>
+        <button id="hintBtn">Hint</button>
+        <button id="checkBtn">Check</button>
+        <button id="solveBtn">Solve</button>
+        <button id="resetBtn">Reset</button>
+      </div>
+    </div>
+
+    <div class="content">
+      <div class="board-wrap">
+        <div id="board" class="board" aria-label="Sudoku Board"></div>
+      </div>
+    </div>
+
+    <div class="side">
+      <div class="stat"><span>Timer</span><strong id="timer">00:00</strong></div>
+      <div class="stat"><span>Conflicts</span><strong id="conflicts">0</strong></div>
+      <div class="labels">
+        <span class="pill">Row/Col/Box rules enforced</span>
+        <span class="pill">Unique-solution puzzles</span>
+        <span class="pill">Keyboard friendly</span>
+      </div>
+    </div>
+
+    <div class="footer">
+      <div class="credits">Built for Sanju — Real Sudoku rules, neon glow, gradient hacker vibe.</div>
+      <div class="credits">Shortcuts: numbers to fill • Backspace to clear • Arrow keys to move</div>
+    </div>
+  </div>
+
+  <script>
+    // =================== Core Sudoku Logic ===================
+    const N = 9;
+    const BOX = 3;
+
+    function deepClone(m){ return m.map(r=>r.slice()); }
+
+    function findEmpty(board){
+      for(let r=0;r<N;r++) for(let c=0;c<N;c++) if(board[r][c]===0) return [r,c];
+      return null;
+    }
+
+    function isValid(board, r, c, v){
+      for(let i=0;i<N;i++) if(board[r][i]===v || board[i][c]===v) return false;
+      const br = Math.floor(r/BOX)*BOX, bc=Math.floor(c/BOX)*BOX;
+      for(let i=br;i<br+BOX;i++) for(let j=bc;j<bc+BOX;j++) if(board[i][j]===v) return false;
+      return true;
+    }
+
+    function solve(board){
+      const empty = findEmpty(board);
+      if(!empty) return true;
+      const [r,c]=empty;
+      for(let v=1; v<=9; v++){
+        if(isValid(board,r,c,v)){
+          board[r][c]=v;
+          if(solve(board)) return true;
+          board[r][c]=0;
+        }
+      }
+      return false;
+    }
+
+    function countSolutions(board, limit=2){
+      let count=0;
+      function bt(){
+        if(count>=limit) return;
+        const empty = findEmpty(board);
+        if(!empty){ count++; return; }
+        const [r,c]=empty;
+        for(let v=1; v<=9; v++){
+          if(isValid(board,r,c,v)){
+            board[r][c]=v; bt(); board[r][c]=0;
+            if(count>=limit) return;
+          }
+        }
+      }
+      bt();
+      return count;
+    }
+
+    function shuffled(arr){ return arr.sort(()=>Math.random()-0.5); }
+
+    function randomFullBoard(){
+      const board = Array.from({length:N},()=>Array(N).fill(0));
+      // fill diagonal boxes randomly for speed
+      for(let d=0; d<N; d+=BOX){
+        const nums = shuffled([1,2,3,4,5,6,7,8,9]);
+        let k=0; for(let i=0;i<BOX;i++) for(let j=0;j<BOX;j++) board[d+i][d+j]=nums[k++];
+      }
+      // solve rest randomly
+      const nums=[1,2,3,4,5,6,7,8,9];
+      function fillRest(){
+        const empty=findEmpty(board); if(!empty) return true;
+        const [r,c]=empty;
+        shuffled(nums);
+        for(const v of nums){
+          if(isValid(board,r,c,v)){
+            board[r][c]=v; if(fillRest()) return true; board[r][c]=0;
+          }
+        }
+        return false;
+      }
+      fillRest();
+      return board;
+    }
+
+    const DIFFICULTY = { easy:40, medium:48, hard:54, expert:58 };
+
+    function makePuzzle(unique=true, holes=48){
+      const solved = randomFullBoard();
+      const puzzle = deepClone(solved);
+      let cells=[]; for(let r=0;r<N;r++) for(let c=0;c<N;c++) cells.push([r,c]);
+      shuffled(cells);
+      let removed=0;
+      while(cells.length && removed<holes){
+        const [r,c]=cells.pop();
+        const bak = puzzle[r][c];
+        puzzle[r][c]=0;
+        if(unique){
+          const tmp = deepClone(puzzle);
+          if(countSolutions(tmp,2)!==1) puzzle[r][c]=bak; else removed++;
+        } else removed++;
+      }
+      return {puzzle, solved};
+    }
+
+    // =================== UI & Game State ===================
+    const boardEl = document.getElementById('board');
+    const levelEl = document.getElementById('level');
+    const conflictsEl = document.getElementById('conflicts');
+    const timerEl = document.getElementById('timer');
+
+    const newBtn = document.getElementById('newGame');
+    const hintBtn = document.getElementById('hintBtn');
+    const checkBtn = document.getElementById('checkBtn');
+    const solveBtn = document.getElementById('solveBtn');
+    const resetBtn = document.getElementById('resetBtn');
+
+    let fixedMask; // boolean 9x9 for fixed cells
+    let current, solution, startTime, timerInt;
+    let activeCell = [0,0];
+
+    function buildBoard(){
+      boardEl.innerHTML='';
+      for(let r=0;r<N;r++){
+        for(let c=0;c<N;c++){
+          const cell = document.createElement('div');
+          cell.className='cell';
+          const input = document.createElement('input');
+          input.className='sudoku';
+          input.maxLength=1; input.inputMode='numeric'; input.autocomplete='off';
+          input.addEventListener('focus',()=>activate(r,c));
+          input.addEventListener('keydown', (e)=> handleKey(e, r, c));
+          input.addEventListener('input', ()=> onInput(r,c,input.value));
+          cell.appendChild(input);
+          boardEl.appendChild(cell);
+        }
+      }
+    }
+
+    function startTimer(){
+      clearInterval(timerInt);
+      startTime = Date.now();
+      timerInt = setInterval(()=>{
+        const s = Math.floor((Date.now()-startTime)/1000);
+        const mm = String(Math.floor(s/60)).padStart(2,'0');
+        const ss = String(s%60).padStart(2,'0');
+        timerEl.textContent = `${mm}:${ss}`;
+      }, 500);
+    }
+
+    function stopTimer(){ clearInterval(timerInt); }
+
+    function newGame(){
+      const holes = DIFFICULTY[levelEl.value] || 48;
+      const {puzzle, solved} = makePuzzle(true, holes);
+      current = deepClone(puzzle); solution = solved;
+      fixedMask = current.map(row=>row.map(v=>v!==0));
+      applyToUI();
+      startTimer();
+      setTimeout(()=>activate(0,0), 50);
+    }
+
+    function applyToUI(){
+      const cells = [...boardEl.querySelectorAll('.cell')];
+      let idx=0; for(let r=0;r<N;r++){
+        for(let c=0;c<N;c++){
+          const cell = cells[idx++];
+          const input = cell.querySelector('input');
+          const v = current[r][c];
+          input.value = v? String(v):'';
+          input.disabled = fixedMask[r][c];
+          cell.classList.toggle('fixed', fixedMask[r][c]);
+        }
+      }
+      refreshConflicts();
+    }
+
+    function activate(r,c){
+      activeCell=[r,c];
+      const cells = [...boardEl.querySelectorAll('.cell')];
+      cells.forEach(x=>{x.classList.remove('active','same')});
+      const sameVal = current[r][c];
+      for(let i=0;i<N;i++){
+        cells[r*N+i].classList.add('active');
+        cells[i*N+c].classList.add('active');
+      }
+      if(sameVal){
+        for(let i=0;i<N;i++) for(let j=0;j<N;j++) if(current[i][j]===sameVal){
+          cells[i*N+j].classList.add('same');
+        }
+      }
+      // focus the input
+      cells[r*N+c].querySelector('input').focus();
+      cells[r*N+c].scrollIntoView({block:'nearest', inline:'nearest'});
+    }
+
+    function handleKey(e,r,c){
+      const k=e.key;
+      if(['ArrowUp','ArrowDown','ArrowLeft','ArrowRight'].includes(k)){
+        e.preventDefault();
+        if(k==='ArrowUp') r = (r+N-1)%N;
+        if(k==='ArrowDown') r = (r+1)%N;
+        if(k==='ArrowLeft') c = (c+N-1)%N;
+        if(k==='ArrowRight') c = (c+1)%N;
+        activate(r,c);return;
+      }
+      if(k==='Backspace' || k==='Delete'){
+        setValue(r,c,0); return;
+      }
+      if(/^[1-9]$/.test(k)){
+        setValue(r,c,Number(k)); return;
+      }
+    }
+
+    function onInput(r,c,val){
+      if(!val){ setValue(r,c,0); return; }
+      if(/^[1-9]$/.test(val)) setValue(r,c,Number(val));
+      else applyToUI();
+    }
+
+    function setValue(r,c,v){
+      if(fixedMask[r][c]) return; // immutable
+      if(v===0){ current[r][c]=0; applyToUI(); return; }
+      if(isValid(current,r,c,v)){
+        current[r][c]=v; applyToUI();
+        if(isSolved()) { stopTimer(); celebrate(); }
+      } else {
+        // temporary set for conflict highlighting
+        current[r][c]=v; applyToUI();
+        // mark the conflicting cell red for a moment
+      }
+    }
+
+    function refreshConflicts(){
+      const cells=[...boardEl.querySelectorAll('.cell')];
+      let conflicts=0;
+      for(let r=0;r<N;r++){
+        for(let c=0;c<N;c++){
+          const v=current[r][c];
+          const cell=cells[r*N+c];
+          cell.classList.remove('conflict');
+          if(v===0) continue;
+          // check duplicates in row/col/box
+          for(let i=0;i<N;i++){
+            if(i!==c && current[r][i]===v){cell.classList.add('conflict'); conflicts++; break;}
+            if(i!==r && current[i][c]===v){cell.classList.add('conflict'); conflicts++; break;}
+          }
+          if(!cell.classList.contains('conflict')){
+            const br=Math.floor(r/BOX)*BOX, bc=Math.floor(c/BOX)*BOX;
+            outer: for(let i=br;i<br+BOX;i++){
+              for(let j=bc;j<bc+BOX;j++){
+                if(i!==r||j!==c){ if(current[i][j]===v){cell.classList.add('conflict'); conflicts++; break outer;} }
+              }
+            }
+          }
+        }
+      }
+      conflictsEl.textContent = conflicts;
+    }
+
+    function isSolved(){
+      for(let r=0;r<N;r++) for(let c=0;c<N;c++) if(current[r][c]!==solution[r][c]) return false;
+      return true;
+    }
+
+    function giveHint(){
+      const empties=[]; for(let r=0;r<N;r++) for(let c=0;c<N;c++) if(current[r][c]===0) empties.push([r,c]);
+      if(!empties.length) return;
+      const [r,c] = empties[Math.floor(Math.random()*empties.length)];
+      current[r][c] = solution[r][c];
+      applyToUI();
+      activate(r,c);
+      if(isSolved()){ stopTimer(); celebrate(); }
+    }
+
+    function checkBoard(){
+      refreshConflicts();
+      const ok = conflictsEl.textContent==='0';
+      pulse(ok? 'All good — no rule violations!' : 'Conflicts found! Fix highlighted cells.', ok);
+    }
+
+    function solveBoard(){
+      current = deepClone(solution);
+      applyToUI();
+      stopTimer();
+      pulse('Solved by system. Try a new game! ✅', true);
+    }
+
+    function resetBoard(){
+      for(let r=0;r<N;r++) for(let c=0;c<N;c++) if(!fixedMask[r][c]) current[r][c]=0;
+      applyToUI();
+      startTimer();
+      pulse('Board reset.', true);
+    }
+
+    function pulse(msg, good=true){
+      const el=document.createElement('div');
+      el.textContent=msg;
+      el.style.position='fixed'; el.style.left='50%'; el.style.top='18px'; el.style.transform='translateX(-50%)';
+      el.style.padding='10px 14px'; el.style.borderRadius='12px';
+      el.style.border='1px solid '+(good?'rgba(0,255,136,.6)':'rgba(255,59,59,.7)');
+      el.style.background='linear-gradient(180deg,'+(good?'rgba(0,255,136,.15)':'rgba(255,59,59,.12)')+','+(good?'rgba(0,255,136,.06)':'rgba(255,59,59,.06)')+')';
+      el.style.color= good? '#d9ffef' : '#ffd2d2';
+      el.style.boxShadow = good? 'var(--glow)' : '0 0 18px rgba(255,59,59,.35)';
+      el.style.zIndex=9999; el.style.backdropFilter='blur(6px)';
+      document.body.appendChild(el);
+      setTimeout(()=>{ el.style.transition='opacity .4s'; el.style.opacity='0'; setTimeout(()=>el.remove(), 400); }, 1400);
+    }
+
+    function celebrate(){
+      pulse('🎉 GG! Perfect solve, Sanju!', true);
+      // simple confetti-like glow
+      for(let i=0;i<18;i++){
+        const dot=document.createElement('div');
+        dot.style.position='fixed';
+        dot.style.left=Math.random()*100+'vw';
+        dot.style.top='-10px';
+        dot.style.width=dot.style.height=(8+Math.random()*10)+'px';
+        dot.style.borderRadius='50%';
+        dot.style.background='radial-gradient(circle, rgba(0,255,136,.9), rgba(0,255,136,0))';
+        dot.style.boxShadow='var(--glow)';
+        dot.style.zIndex=9999;
+        document.body.appendChild(dot);
+        const dy= 110 + Math.random()*60;
+        const dur= 800 + Math.random()*800;
+        dot.animate([{transform:'translateY(0)'},{transform:`translateY(${dy}vh)`}],{duration:dur,easing:'cubic-bezier(.2,.7,.2,1)'}).onfinish=()=>dot.remove();
+      }
+    }
+
+    // =================== Events ===================
+    newBtn.addEventListener('click', newGame);
+    hintBtn.addEventListener('click', giveHint);
+    checkBtn.addEventListener('click', checkBoard);
+    solveBtn.addEventListener('click', solveBoard);
+    resetBtn.addEventListener('click', resetBoard);
+
+    // Build UI and start first game
+    buildBoard();
+    newGame();
+  </script>
+</body>
+</html>
